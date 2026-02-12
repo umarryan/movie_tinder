@@ -12,7 +12,7 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
 
-class SwipeDirection(enum.Enum):
+class SwipeDirection(str, enum.Enum):
     LEFT = "left"
     RIGHT = "right"
 
@@ -87,7 +87,15 @@ class Swipe(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     movie_id = Column(Integer, ForeignKey("movies.id"), nullable=False)
-    direction = Column(SQLEnum(SwipeDirection), nullable=False)
+    # Store lowercase values ("left"/"right") in the DB enum
+    direction = Column(
+        SQLEnum(
+            SwipeDirection,
+            values_callable=lambda enum_cls: [e.value for e in enum_cls],
+            name="swipedirection",
+        ),
+        nullable=False,
+    )
     created_at = Column(DateTime, default=datetime.utcnow)
 
     user = relationship("User", back_populates="swipes")
