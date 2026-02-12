@@ -1,0 +1,830 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Movie Tinder</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .tabs {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .tab {
+            padding: 10px 20px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: all 0.3s;
+        }
+
+        .tab:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .tab.active {
+            background: white;
+            color: #667eea;
+        }
+
+        .content {
+            display: none;
+        }
+
+        .content.active {
+            display: block;
+        }
+
+        /* Login/Register Section */
+        .auth-section {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            max-width: 400px;
+            margin: 0 auto;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+        }
+
+        .auth-section h2 {
+            margin-bottom: 20px;
+            color: #667eea;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #333;
+            font-weight: 500;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .invite-code {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            text-align: center;
+        }
+
+        .invite-code strong {
+            color: #667eea;
+            font-size: 18px;
+        }
+
+        /* Swipe Section */
+        .swipe-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 600px;
+            position: relative;
+        }
+
+        .movie-card {
+            width: 400px;
+            height: 600px;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+            position: absolute;
+            cursor: grab;
+            transition: transform 0.3s;
+            overflow: hidden;
+        }
+
+        .movie-card:active {
+            cursor: grabbing;
+        }
+
+        .movie-card.swiping-left {
+            transform: rotate(-15deg) translateX(-100px);
+            opacity: 0.5;
+        }
+
+        .movie-card.swiping-right {
+            transform: rotate(15deg) translateX(100px);
+            opacity: 0.5;
+        }
+
+        .movie-poster {
+            width: 100%;
+            height: 60%;
+            object-fit: cover;
+            background: #f0f0f0;
+        }
+
+        .movie-info {
+            padding: 20px;
+            height: 40%;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .movie-title {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        .movie-meta {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 10px;
+            color: #666;
+            font-size: 14px;
+        }
+
+        .movie-description {
+            color: #555;
+            line-height: 1.6;
+            flex-grow: 1;
+            overflow-y: auto;
+        }
+
+        .movie-streaming {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 10px;
+        }
+
+        .streaming-badge {
+            background: #667eea;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 12px;
+        }
+
+        .swipe-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-top: 30px;
+        }
+
+        .swipe-btn {
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            border: none;
+            font-size: 30px;
+            cursor: pointer;
+            transition: transform 0.2s;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .swipe-btn:hover {
+            transform: scale(1.1);
+        }
+
+        .swipe-btn.left {
+            background: #ff6b6b;
+            color: white;
+        }
+
+        .swipe-btn.right {
+            background: #51cf66;
+            color: white;
+        }
+
+        .no-movies {
+            text-align: center;
+            color: white;
+            font-size: 24px;
+            padding: 40px;
+        }
+
+        /* Friends Section */
+        .friends-section {
+            background: white;
+            padding: 30px;
+            border-radius: 20px;
+            margin-bottom: 20px;
+        }
+
+        .friends-section h2 {
+            margin-bottom: 20px;
+            color: #667eea;
+        }
+
+        .friend-form {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .friend-form input {
+            flex: 1;
+            padding: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+        }
+
+        .friends-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 15px;
+        }
+
+        .friend-card {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        /* Matches Section */
+        .matches-section {
+            background: white;
+            padding: 30px;
+            border-radius: 20px;
+        }
+
+        .matches-section h2 {
+            margin-bottom: 20px;
+            color: #667eea;
+        }
+
+        .matches-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 20px;
+        }
+
+        .match-card {
+            background: #f5f5f5;
+            padding: 20px;
+            border-radius: 10px;
+            border-left: 4px solid #51cf66;
+        }
+
+        .match-card h3 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .match-card p {
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .filter-section {
+            background: white;
+            padding: 20px;
+            border-radius: 20px;
+            margin-bottom: 20px;
+        }
+
+        .filter-section h3 {
+            margin-bottom: 15px;
+            color: #667eea;
+        }
+
+        .filter-checkboxes {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .filter-checkbox {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .filter-checkbox input {
+            width: 20px;
+            height: 20px;
+        }
+
+        .error {
+            background: #ff6b6b;
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .success {
+            background: #51cf66;
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎬 Movie Tinder</h1>
+            <p>Swipe through movies and find matches with friends!</p>
+        </div>
+
+        <div id="loginSection" class="content active">
+            <div class="auth-section">
+                <h2>Login / Register</h2>
+                <div class="form-group">
+                    <label for="username">Username</label>
+                    <input type="text" id="username" placeholder="Enter your username">
+                </div>
+                <button class="btn" onclick="loginOrRegister()">Continue</button>
+                <div id="loginError" class="error" style="display: none;"></div>
+            </div>
+        </div>
+
+        <div id="mainSection" class="content">
+            <div style="text-align: center; margin-bottom: 20px; color: white;">
+                <p>Logged in as: <strong id="currentUsername"></strong></p>
+                <p>Your invite code: <strong id="userInviteCode" style="font-size: 18px; background: rgba(255,255,255,0.2); padding: 5px 15px; border-radius: 10px; display: inline-block;">Loading...</strong></p>
+            </div>
+            <div class="tabs">
+                <button class="tab active" onclick="showTab('swipe')">Swipe Movies</button>
+                <button class="tab" onclick="showTab('friends')">Friends</button>
+                <button class="tab" onclick="showTab('matches')">Matches</button>
+            </div>
+
+            <div id="swipeTab" class="content active">
+                <div class="filter-section">
+                    <h3>Filter by Streaming Service</h3>
+                    <div class="filter-checkboxes" id="streamingFilters"></div>
+                    <button class="btn" onclick="applyFilters()" style="margin-top: 15px; max-width: 200px;">Apply Filters</button>
+                </div>
+                <div class="swipe-container" id="swipeContainer">
+                    <div class="no-movies">Loading movies...</div>
+                </div>
+                <div class="swipe-buttons">
+                    <button class="swipe-btn left" onclick="swipeLeft()">✕</button>
+                    <button class="swipe-btn right" onclick="swipeRight()">♥</button>
+                </div>
+            </div>
+
+            <div id="friendsTab" class="content">
+                <div class="friends-section">
+                    <h2>Add Friend</h2>
+                    <div class="friend-form">
+                        <input type="text" id="friendInviteCode" placeholder="Enter friend's invite code">
+                        <button class="btn" onclick="sendFriendRequest()">Send Request</button>
+                    </div>
+                    <div id="friendMessage"></div>
+                    <h2>Your Friends</h2>
+                    <div class="friends-list" id="friendsList"></div>
+                    <h2 style="margin-top: 30px;">Pending Requests</h2>
+                    <div class="friends-list" id="pendingRequests"></div>
+                </div>
+            </div>
+
+            <div id="matchesTab" class="content">
+                <div class="matches-section">
+                    <h2>Your Matches</h2>
+                    <div class="matches-list" id="matchesList"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentUser = null;
+        let currentMovies = [];
+        let currentMovieIndex = 0;
+        let currentCard = null;
+        let startX = 0;
+        let currentX = 0;
+        let isDragging = false;
+        let streamingServices = [];
+        let selectedFilters = [];
+
+        // Check if user is logged in
+        function checkAuth() {
+            const savedUser = localStorage.getItem('currentUser');
+            if (savedUser) {
+                currentUser = JSON.parse(savedUser);
+                showMainSection();
+            }
+        }
+
+        // Login or Register
+        async function loginOrRegister() {
+            const username = document.getElementById('username').value.trim();
+            if (!username) {
+                showError('loginError', 'Please enter a username');
+                return;
+            }
+
+            try {
+                // Try to get user first
+                const response = await fetch(`/api/users/${username}`);
+                if (response.ok) {
+                    currentUser = await response.json();
+                } else {
+                    // Create new user
+                    const createResponse = await fetch('/api/users/', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ username })
+                    });
+                    if (!createResponse.ok) throw new Error('Failed to create user');
+                    currentUser = await createResponse.json();
+                }
+                
+                localStorage.setItem('currentUser', JSON.stringify(currentUser));
+                showMainSection();
+            } catch (error) {
+                showError('loginError', 'Error: ' + error.message);
+            }
+        }
+
+        function showMainSection() {
+            document.getElementById('loginSection').classList.remove('active');
+            document.getElementById('mainSection').classList.add('active');
+            document.getElementById('currentUsername').textContent = currentUser.username;
+            document.getElementById('userInviteCode').textContent = currentUser.invite_code;
+            loadStreamingServices();
+            loadMovies();
+            loadFriends();
+            loadMatches();
+        }
+
+        function showTab(tabName) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.content').forEach(c => c.classList.remove('active'));
+            
+            event.target.classList.add('active');
+            document.getElementById(tabName + 'Tab').classList.add('active');
+        }
+
+        // Load streaming services for filters
+        async function loadStreamingServices() {
+            try {
+                const response = await fetch('/api/streaming-services/');
+                streamingServices = await response.json();
+                const container = document.getElementById('streamingFilters');
+                container.innerHTML = streamingServices.map(service => `
+                    <div class="filter-checkbox">
+                        <input type="checkbox" id="filter-${service.id}" value="${service.name}" onchange="updateFilters()">
+                        <label for="filter-${service.id}">${service.name}</label>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading streaming services:', error);
+            }
+        }
+
+        function updateFilters() {
+            selectedFilters = Array.from(document.querySelectorAll('#streamingFilters input:checked')).map(cb => cb.value);
+        }
+
+        async function applyFilters() {
+            await loadMovies();
+        }
+
+        // Load movies
+        async function loadMovies() {
+            try {
+                const filterParams = selectedFilters.length > 0 
+                    ? `&streaming_services=${encodeURIComponent(JSON.stringify(selectedFilters))}`
+                    : '';
+                const response = await fetch(`/api/movies/?current_username=${currentUser.username}${filterParams}`);
+                currentMovies = await response.json();
+                currentMovieIndex = 0;
+                displayCurrentMovie();
+            } catch (error) {
+                document.getElementById('swipeContainer').innerHTML = '<div class="no-movies">Error loading movies</div>';
+            }
+        }
+
+        // Display current movie
+        function displayCurrentMovie() {
+            const container = document.getElementById('swipeContainer');
+            
+            if (currentMovieIndex >= currentMovies.length) {
+                container.innerHTML = '<div class="no-movies">No more movies! Check back later or adjust your filters.</div>';
+                return;
+            }
+
+            const movie = currentMovies[currentMovieIndex];
+            const streamingBadges = movie.streaming_services.map(s => 
+                `<span class="streaming-badge">${s.name}</span>`
+            ).join('');
+
+            container.innerHTML = `
+                <div class="movie-card" id="currentCard">
+                    <img src="${movie.poster_url || 'https://via.placeholder.com/400x600?text=No+Poster'}" 
+                         alt="${movie.title}" class="movie-poster" 
+                         onerror="this.src='https://via.placeholder.com/400x600?text=No+Poster'">
+                    <div class="movie-info">
+                        <div class="movie-title">${movie.title}</div>
+                        <div class="movie-meta">
+                            <span>${movie.genre}</span>
+                            <span>${movie.rating || 'N/A'}</span>
+                            ${movie.imdb_rating ? `<span>⭐ ${movie.imdb_rating}</span>` : ''}
+                        </div>
+                        <div class="movie-description">${movie.description || 'No description available'}</div>
+                        <div class="movie-streaming">${streamingBadges || '<span class="streaming-badge">Not Available</span>'}</div>
+                    </div>
+                </div>
+            `;
+
+            currentCard = document.getElementById('currentCard');
+            setupSwipeHandlers();
+        }
+
+        // Setup swipe handlers
+        function setupSwipeHandlers() {
+            if (!currentCard) return;
+
+            currentCard.addEventListener('mousedown', startDrag);
+            currentCard.addEventListener('touchstart', startDrag);
+            document.addEventListener('mousemove', drag);
+            document.addEventListener('touchmove', drag);
+            document.addEventListener('mouseup', endDrag);
+            document.addEventListener('touchend', endDrag);
+        }
+
+        function startDrag(e) {
+            isDragging = true;
+            startX = e.type === 'mousedown' ? e.clientX : e.touches[0].clientX;
+            currentCard.style.transition = 'none';
+        }
+
+        function drag(e) {
+            if (!isDragging || !currentCard) return;
+            e.preventDefault();
+            currentX = e.type === 'mousemove' ? e.clientX : e.touches[0].clientX;
+            const deltaX = currentX - startX;
+            const rotation = deltaX / 10;
+            
+            currentCard.style.transform = `translateX(${deltaX}px) rotate(${rotation}deg)`;
+            
+            if (deltaX > 50) {
+                currentCard.classList.add('swiping-right');
+                currentCard.classList.remove('swiping-left');
+            } else if (deltaX < -50) {
+                currentCard.classList.add('swiping-left');
+                currentCard.classList.remove('swiping-right');
+            } else {
+                currentCard.classList.remove('swiping-left', 'swiping-right');
+            }
+        }
+
+        function endDrag() {
+            if (!isDragging || !currentCard) return;
+            isDragging = false;
+            currentCard.style.transition = 'transform 0.3s';
+            
+            const deltaX = currentX - startX;
+            if (Math.abs(deltaX) > 100) {
+                if (deltaX > 0) {
+                    swipeRight();
+                } else {
+                    swipeLeft();
+                }
+            } else {
+                currentCard.style.transform = '';
+                currentCard.classList.remove('swiping-left', 'swiping-right');
+            }
+        }
+
+        // Swipe functions
+        async function swipeLeft() {
+            if (currentMovieIndex >= currentMovies.length) return;
+            await performSwipe('left');
+        }
+
+        async function swipeRight() {
+            if (currentMovieIndex >= currentMovies.length) return;
+            await performSwipe('right');
+        }
+
+        async function performSwipe(direction) {
+            const movie = currentMovies[currentMovieIndex];
+            
+            try {
+                const response = await fetch(`/api/swipes/?current_username=${currentUser.username}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        movie_id: movie.id,
+                        direction: direction
+                    })
+                });
+
+                if (!response.ok) throw new Error('Failed to swipe');
+
+                // Animate card out
+                if (currentCard) {
+                    currentCard.style.transition = 'transform 0.3s';
+                    if (direction === 'left') {
+                        currentCard.style.transform = 'translateX(-1000px) rotate(-30deg)';
+                    } else {
+                        currentCard.style.transform = 'translateX(1000px) rotate(30deg)';
+                    }
+                }
+
+                setTimeout(() => {
+                    currentMovieIndex++;
+                    displayCurrentMovie();
+                    loadMatches(); // Check for new matches
+                }, 300);
+            } catch (error) {
+                alert('Error swiping: ' + error.message);
+            }
+        }
+
+        // Friends functions
+        async function sendFriendRequest() {
+            const inviteCode = document.getElementById('friendInviteCode').value.trim();
+            if (!inviteCode) {
+                showMessage('friendMessage', 'Please enter an invite code', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/friends/request?current_username=${currentUser.username}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ invite_code: inviteCode })
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Failed to send request');
+                }
+
+                showMessage('friendMessage', 'Friend request sent!', 'success');
+                document.getElementById('friendInviteCode').value = '';
+                loadFriends();
+            } catch (error) {
+                showMessage('friendMessage', error.message, 'error');
+            }
+        }
+
+        async function loadFriends() {
+            try {
+                const [friendsResponse, requestsResponse] = await Promise.all([
+                    fetch(`/api/friends/?current_username=${currentUser.username}`),
+                    fetch(`/api/friends/requests?current_username=${currentUser.username}`)
+                ]);
+
+                const friends = await friendsResponse.json();
+                const requests = await requestsResponse.json();
+
+                const friendsList = document.getElementById('friendsList');
+                friendsList.innerHTML = friends.map(f => `
+                    <div class="friend-card">
+                        <h3>${f.friend.username}</h3>
+                        <p>Invite Code: ${f.friend.invite_code}</p>
+                    </div>
+                `).join('') || '<p>No friends yet</p>';
+
+                const pendingList = document.getElementById('pendingRequests');
+                pendingList.innerHTML = requests.map(r => `
+                    <div class="friend-card">
+                        <h3>${r.sender.username}</h3>
+                        <button class="btn" onclick="acceptRequest(${r.id})" style="margin-top: 10px;">Accept</button>
+                    </div>
+                `).join('') || '<p>No pending requests</p>';
+            } catch (error) {
+                console.error('Error loading friends:', error);
+            }
+        }
+
+        async function acceptRequest(requestId) {
+            try {
+                const response = await fetch(`/api/friends/accept/${requestId}?current_username=${currentUser.username}`, {
+                    method: 'POST'
+                });
+
+                if (!response.ok) throw new Error('Failed to accept request');
+                
+                showMessage('friendMessage', 'Friend request accepted!', 'success');
+                loadFriends();
+            } catch (error) {
+                showMessage('friendMessage', error.message, 'error');
+            }
+        }
+
+        // Matches functions
+        async function loadMatches() {
+            try {
+                const response = await fetch(`/api/matches/?current_username=${currentUser.username}`);
+                const matches = await response.json();
+
+                const matchesList = document.getElementById('matchesList');
+                matchesList.innerHTML = matches.map(m => {
+                    const streamingBadges = m.movie.streaming_services.map(s => 
+                        `<span class="streaming-badge">${s.name}</span>`
+                    ).join('');
+                    
+                    return `
+                        <div class="match-card">
+                            <h3>🎬 ${m.movie.title}</h3>
+                            <p><strong>Matched with:</strong> ${m.friend.username}</p>
+                            <p><strong>Genre:</strong> ${m.movie.genre}</p>
+                            <p><strong>Rating:</strong> ${m.movie.rating || 'N/A'}</p>
+                            <div style="margin-top: 10px;">
+                                <strong>Available on:</strong>
+                                <div class="movie-streaming" style="margin-top: 5px;">${streamingBadges || 'Not Available'}</div>
+                            </div>
+                        </div>
+                    `;
+                }).join('') || '<p>No matches yet. Keep swiping!</p>';
+            } catch (error) {
+                console.error('Error loading matches:', error);
+            }
+        }
+
+        function showError(elementId, message) {
+            const element = document.getElementById(elementId);
+            element.textContent = message;
+            element.style.display = 'block';
+        }
+
+        function showMessage(elementId, message, type) {
+            const element = document.getElementById(elementId);
+            element.innerHTML = `<div class="${type}">${message}</div>`;
+            setTimeout(() => {
+                element.innerHTML = '';
+            }, 3000);
+        }
+
+        // Initialize
+        checkAuth();
+    </script>
+</body>
+</html>
