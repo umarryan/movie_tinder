@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import Optional, List
 from datetime import datetime
 from enum import Enum
@@ -92,6 +92,17 @@ class MovieResponse(BaseModel):
 class SwipeCreate(BaseModel):
     movie_id: int
     direction: SwipeDirection
+
+    # Allow direction values like "LEFT", "Right", etc. by normalizing to lowercase
+    @field_validator("direction", mode="before")
+    @classmethod
+    def normalize_direction(cls, v):
+        if isinstance(v, str):
+            v = v.lower()
+        try:
+            return SwipeDirection(v)
+        except ValueError:
+            raise ValueError("direction must be 'left' or 'right'")
 
 
 class SwipeResponse(BaseModel):

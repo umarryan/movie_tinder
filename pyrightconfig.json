@@ -1,0 +1,5 @@
+{
+  // Use basic type checking but don't flag installed third-party libs as missing
+  "typeCheckingMode": "basic",
+  "reportMissingImports": false
+}

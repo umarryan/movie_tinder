@@ -489,7 +489,8 @@ def get_streaming_services(db: Session = Depends(get_db)):
 # ROOT ENDPOINT - Serve frontend
 @app.get("/", response_class=HTMLResponse)
 def read_root():
-    with open("static/index.html", "r") as f:
+    # Explicitly use UTF-8 so Windows default encoding (cp1252) doesn't break on special characters
+    with open("static/index.html", "r", encoding="utf-8") as f:
         return f.read()
 
 
