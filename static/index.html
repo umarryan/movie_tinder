@@ -578,15 +578,18 @@
             }
 
             const movie = currentMovies[currentMovieIndex];
-            const streamingBadges = movie.streaming_services.map(s => 
+            const streamingBadges = movie.streaming_services.map(s =>
                 `<span class="streaming-badge">${s.name}</span>`
             ).join('');
 
+            // Use a reliable placeholder image service
+            const placeholderPoster = 'https://placehold.co/400x600?text=No+Poster';
+
             container.innerHTML = `
                 <div class="movie-card" id="currentCard">
-                    <img src="${movie.poster_url || 'https://via.placeholder.com/400x600?text=No+Poster'}" 
-                         alt="${movie.title}" class="movie-poster" 
-                         onerror="this.src='https://via.placeholder.com/400x600?text=No+Poster'">
+                    <img src="${movie.poster_url || placeholderPoster}"
+                         alt="${movie.title}" class="movie-poster"
+                         onerror="this.src='${placeholderPoster}'">
                     <div class="movie-info">
                         <div class="movie-title">${movie.title}</div>
                         <div class="movie-meta">
