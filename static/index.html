@@ -387,9 +387,29 @@
             border-radius: 8px;
             margin-bottom: 20px;
         }
+
+        .toast {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #51cf66;
+            color: white;
+            padding: 14px 24px;
+            border-radius: 10px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+            z-index: 9999;
+            font-weight: 500;
+            animation: toastIn 0.3s ease;
+        }
+        @keyframes toastIn {
+            from { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+            to { opacity: 1; transform: translateX(-50%) translateY(0); }
+        }
     </style>
 </head>
 <body>
+    <div id="toastContainer"></div>
     <div class="container">
         <div class="header">
             <h1>🎬 Movie Tinder</h1>
@@ -423,7 +443,12 @@
                 <div class="filter-section">
                     <h3>Filter by Streaming Service</h3>
                     <div class="filter-checkboxes" id="streamingFilters"></div>
-                    <button class="btn" onclick="applyFilters()" style="margin-top: 15px; max-width: 200px;">Apply Filters</button>
+                    <div style="margin-top: 15px; display: flex; gap: 10px; flex-wrap: wrap;">
+                        <button class="btn" onclick="applyFilters()" style="max-width: 200px;">Apply Filters</button>
+                        <button class="btn" onclick="refreshMovies()" style="max-width: 200px; background: rgba(255,255,255,0.9); color: #667eea;">Refresh movies</button>
+                        <button class="btn" onclick="loadMoreFromTMDB()" style="max-width: 220px; background: #2d3748; color: white;" id="loadMoreBtn">Load more from TMDB</button>
+                    </div>
+                    <p id="loadMoreStatus" style="margin-top: 8px; color: white; font-size: 14px;"></p>
                 </div>
                 <div class="swipe-container" id="swipeContainer">
                     <div class="no-movies">Loading movies...</div>
@@ -468,6 +493,8 @@
         let isDragging = false;
         let streamingServices = [];
         let selectedFilters = [];
+        let matchSocket = null;
+        let matchSocketReconnectDelay = 3000;
 
         // Check if user is logged in
         function checkAuth() {
@@ -518,14 +545,68 @@
             loadMovies();
             loadFriends();
             loadMatches();
+            connectMatchSocket();
+        }
+
+        function showToast(message) {
+            const container = document.getElementById('toastContainer');
+            const el = document.createElement('div');
+            el.className = 'toast';
+            el.textContent = message;
+            container.appendChild(el);
+            setTimeout(() => {
+                if (el.parentNode) el.parentNode.removeChild(el);
+            }, 4000);
+        }
+
+        function connectMatchSocket() {
+            if (!currentUser || !currentUser.username) return;
+            if (matchSocket && matchSocket.readyState === WebSocket.OPEN) return;
+            const scheme = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = scheme + '//' + location.host + '/ws/' + encodeURIComponent(currentUser.username);
+            try {
+                matchSocket = new WebSocket(wsUrl);
+                matchSocket.onmessage = function (event) {
+                    try {
+                        const data = JSON.parse(event.data);
+                        if (data.type === 'new_match') {
+                            showToast('New match with ' + (data.friend_username || 'a friend') + ' on ' + (data.movie_title || 'a movie'));
+                            loadMatches();
+                        }
+                    } catch (e) {
+                        console.warn('WebSocket message parse error', e);
+                    }
+                };
+                matchSocket.onclose = function () {
+                    matchSocket = null;
+                    setTimeout(connectMatchSocket, matchSocketReconnectDelay);
+                };
+                matchSocket.onerror = function () {
+                    matchSocket.close();
+                };
+            } catch (e) {
+                console.warn('WebSocket connect error', e);
+                setTimeout(connectMatchSocket, matchSocketReconnectDelay);
+            }
         }
 
         function showTab(tabName) {
+            // Update tab button styles
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.content').forEach(c => c.classList.remove('active'));
-            
-            event.target.classList.add('active');
+            const button = document.querySelector(`.tab[onclick="showTab('${tabName}')"]`);
+            if (button) {
+                button.classList.add('active');
+            }
+
+            // Only switch between the inner tab contents, keep mainSection visible
+            document.querySelectorAll('#swipeTab, #friendsTab, #matchesTab')
+                .forEach(c => c.classList.remove('active'));
             document.getElementById(tabName + 'Tab').classList.add('active');
+
+            // Reload movies when opening Swipe tab so new TMDB-synced movies show up
+            if (tabName === 'swipe' && currentUser) {
+                refreshMovies();
+            }
         }
 
         // Load streaming services for filters
@@ -553,6 +634,37 @@
             await loadMovies();
         }
 
+        async function refreshMovies() {
+            const container = document.getElementById('swipeContainer');
+            container.innerHTML = '<div class="no-movies">Loading movies...</div>';
+            await loadMovies();
+        }
+
+        async function loadMoreFromTMDB() {
+            const btn = document.getElementById('loadMoreBtn');
+            const status = document.getElementById('loadMoreStatus');
+            if (btn.disabled) return;
+            btn.disabled = true;
+            status.textContent = 'Fetching popular movies from TMDB...';
+            try {
+                let totalAdded = 0;
+                for (let page = 1; page <= 3; page++) {
+                    status.textContent = `Fetching page ${page}...`;
+                    const r = await fetch(`/api/load-more-movies?page=${page}`, { method: 'POST' });
+                    const data = await r.json();
+                    if (!r.ok) throw new Error(data.detail || 'Failed');
+                    totalAdded += data.added || 0;
+                }
+                status.textContent = totalAdded ? `Added ${totalAdded} new movies. Refreshing...` : 'No new movies on this page (you may have them already).';
+                await new Promise(r => setTimeout(r, 400));
+                await refreshMovies();
+                if (totalAdded) status.textContent = 'Done. Swipe through the new movies above.';
+            } catch (e) {
+                status.textContent = 'Error: ' + e.message + ' (Is TMDB_API_KEY set in .env?)';
+            }
+            btn.disabled = false;
+        }
+
         // Load movies
         async function loadMovies() {
             try {
@@ -573,7 +685,7 @@
             const container = document.getElementById('swipeContainer');
             
             if (currentMovieIndex >= currentMovies.length) {
-                container.innerHTML = '<div class="no-movies">No more movies! Check back later or adjust your filters.</div>';
+                container.innerHTML = '<div class="no-movies">No more movies right now. Tap <strong>Refresh movies</strong> above after adding more (or clear filters), or run <code>python seed_movies.py</code> with TMDB_API_KEY set to seed the catalog.</div>';
                 return;
             }
 

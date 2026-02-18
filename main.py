@@ -1,6 +1,8 @@
-from fastapi import FastAPI, Depends, HTTPException, status, Query
+from fastapi import FastAPI, Depends, HTTPException, status, Query, WebSocket, WebSocketDisconnect, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, JSONResponse
+import asyncio
+import json
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_
 from typing import List, Optional
@@ -9,10 +11,11 @@ import string
 from datetime import datetime
 
 from database import (
-    get_db, init_db, User, Movie, Swipe, Match, FriendRequest, 
+    get_db, init_db, User, Movie, Swipe, Match, FriendRequest,
     Friendship, StreamingService, MovieStreamingService, WatchSession,
     SwipeDirection
 )
+from tmdb_sync import sync_movie_from_tmdb, sync_movie_by_title, sync_popular_movies
 from models import (
     UserCreate, UserResponse, FriendRequestCreate, FriendRequestResponse,
     FriendshipResponse, MovieResponse, SwipeCreate, SwipeResponse,
@@ -27,6 +30,52 @@ init_db()
 
 # Mount static files for frontend
 app.mount("/static", StaticFiles(directory="static"), name="static")
+
+
+@app.on_event("startup")
+async def store_event_loop():
+    app.state.loop = asyncio.get_running_loop()
+
+
+# WebSocket connection manager for real-time notifications
+class ConnectionManager:
+    def __init__(self):
+        self._connections: dict[str, WebSocket] = {}
+
+    async def connect(self, websocket: WebSocket, username: str) -> None:
+        await websocket.accept()
+        self._connections[username] = websocket
+
+    def disconnect(self, username: str) -> None:
+        self._connections.pop(username, None)
+
+    async def send_personal(self, username: str, message: dict) -> None:
+        ws = self._connections.get(username)
+        if ws:
+            try:
+                await ws.send_text(json.dumps(message))
+            except Exception:
+                self.disconnect(username)
+
+
+connection_manager = ConnectionManager()
+
+
+async def notify_new_match(
+    user1_username: str,
+    user2_username: str,
+    match_id: int,
+    movie_title: str,
+) -> None:
+    """Send new_match notification to both users (each sees the other as friend)."""
+    await connection_manager.send_personal(
+        user1_username,
+        {"type": "new_match", "match_id": match_id, "movie_title": movie_title, "friend_username": user2_username},
+    )
+    await connection_manager.send_personal(
+        user2_username,
+        {"type": "new_match", "match_id": match_id, "movie_title": movie_title, "friend_username": user1_username},
+    )
 
 
 # Helper function to generate invite code
@@ -278,7 +327,13 @@ def get_movie(movie_id: int, db: Session = Depends(get_db)):
 
 # SWIPE ENDPOINTS
 @app.post("/api/swipes/", response_model=SwipeResponse)
-def create_swipe(swipe: SwipeCreate, current_username: str = Query(...), db: Session = Depends(get_db)):
+def create_swipe(
+    swipe: SwipeCreate,
+    current_username: str = Query(...),
+    request: Request = None,
+    db: Session = Depends(get_db),
+):
+    _app = request.app if request else None
     current_user = get_user_by_username(db, current_username)
     if not current_user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -308,13 +363,13 @@ def create_swipe(swipe: SwipeCreate, current_username: str = Query(...), db: Ses
     
     # Check for matches if swiped right
     if swipe.direction == SwipeDirection.RIGHT:
-        check_for_matches(db, current_user.id, swipe.movie_id)
+        check_for_matches(db, current_user.id, swipe.movie_id, _app)
     
     return db_swipe
 
 
-def check_for_matches(db: Session, user_id: int, movie_id: int):
-    """Check if swiping right creates a match with any friend"""
+def check_for_matches(db: Session, user_id: int, movie_id: int, app=None):
+    """Check if swiping right creates a match with any friend. Notifies both users via WebSocket if connected."""
     # Get all friends
     friendships = db.query(Friendship).filter(
         or_(Friendship.user1_id == user_id, Friendship.user2_id == user_id)
@@ -351,6 +406,26 @@ def check_for_matches(db: Session, user_id: int, movie_id: int):
                 )
                 db.add(match)
                 db.commit()
+                db.refresh(match)
+                movie_row = db.query(Movie).filter(Movie.id == movie_id).first()
+                user1 = db.query(User).filter(User.id == match.user1_id).first()
+                user2 = db.query(User).filter(User.id == match.user2_id).first()
+                movie_title = movie_row.title if movie_row else ""
+
+                # Notify both users in real time (best-effort, non-blocking)
+                loop = getattr(getattr(app, "state", None), "loop", None) if app else None
+                if loop and user1 and user2:
+                    def _notify():
+                        asyncio.ensure_future(
+                            notify_new_match(
+                                user1.username,
+                                user2.username,
+                                match.id,
+                                movie_title,
+                            ),
+                            loop=loop,
+                        )
+                    loop.call_soon_threadsafe(_notify)
 
 
 @app.get("/api/swipes/", response_model=List[SwipeResponse])
@@ -484,6 +559,44 @@ def get_watch_sessions(current_username: str = Query(...), db: Session = Depends
 @app.get("/api/streaming-services/", response_model=List[StreamingServiceResponse])
 def get_streaming_services(db: Session = Depends(get_db)):
     return db.query(StreamingService).all()
+
+
+# ADMIN - TMDB sync (seed/refresh movie and streaming availability)
+@app.post("/admin/sync-movie/{movie_id}")
+def admin_sync_movie(movie_id: int, db: Session = Depends(get_db)):
+    if not sync_movie_from_tmdb(db, movie_id):
+        raise HTTPException(status_code=404, detail="Movie not found or TMDB sync failed")
+    return {"message": "Synced", "movie_id": movie_id}
+
+
+@app.post("/admin/sync-movie-by-title")
+def admin_sync_movie_by_title(
+    title: str,
+    year: Optional[int] = None,
+    db: Session = Depends(get_db),
+):
+    movie = sync_movie_by_title(db, title, year)
+    if not movie:
+        raise HTTPException(status_code=404, detail="TMDB search failed or no results")
+    return {"message": "Synced", "movie_id": movie.id, "title": movie.title}
+
+
+@app.post("/api/load-more-movies")
+def load_more_movies(page: int = 1, db: Session = Depends(get_db)):
+    """Fetch a page of popular movies from TMDB and add new ones to the catalog."""
+    added = sync_popular_movies(db, page)
+    return {"added": added, "message": f"Added {added} new movies from TMDB."}
+
+
+# WebSocket endpoint for real-time notifications
+@app.websocket("/ws/{username}")
+async def websocket_endpoint(websocket: WebSocket, username: str):
+    await connection_manager.connect(websocket, username)
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        connection_manager.disconnect(username)
 
 
 # ROOT ENDPOINT - Serve frontend
