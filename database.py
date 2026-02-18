@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, ForeignKey, Text, Enum as SQLEnum
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, ForeignKey, Text, Enum as SQLEnum, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from datetime import datetime
@@ -6,7 +6,13 @@ import enum
 
 SQLALCHEMY_DATABASE_URL = "sqlite:///./movie_tinder.db"
 
-engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
+# Timeout 20s so concurrent requests (swipe + load-more + get_movies) wait instead of "database is locked"
+# WAL mode allows one writer + multiple readers and reduces lock contention
+engine = create_engine(
+    SQLALCHEMY_DATABASE_URL,
+    connect_args={"check_same_thread": False, "timeout": 20},
+    pool_pre_ping=True,
+)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()
@@ -73,6 +79,8 @@ class Movie(Base):
     poster_url = Column(String)
     release_year = Column(Integer)
     imdb_rating = Column(String)  # e.g., "8.5/10"
+    tmdb_id = Column(Integer, unique=True, index=True, nullable=True)  # TMDB movie id for watch/providers
+    original_title = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Relationships
@@ -151,9 +159,24 @@ class WatchSession(Base):
     user2 = relationship("User", foreign_keys=[user2_id], back_populates="watch_sessions_as_user2")
 
 
-# Create all tables
+# Create all tables and add new columns to existing tables (migration)
 def init_db():
     Base.metadata.create_all(bind=engine)
+    # Enable WAL for better concurrent read/write (avoids "database is locked")
+    with engine.connect() as conn:
+        conn.execute(text("PRAGMA journal_mode=WAL"))
+        conn.commit()
+    # Add new Movie columns if they don't exist (for existing DBs)
+    with engine.connect() as conn:
+        for _name, sql in [
+            ("tmdb_id", "ALTER TABLE movies ADD COLUMN tmdb_id INTEGER"),
+            ("original_title", "ALTER TABLE movies ADD COLUMN original_title VARCHAR"),
+        ]:
+            try:
+                conn.execute(text(sql))
+                conn.commit()
+            except Exception:
+                conn.rollback()
 
 
 # Dependency to get DB session
